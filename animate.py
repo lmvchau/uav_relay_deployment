@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation, FFMpegWriter
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from terrain_utils import crop_terrain
 
 
@@ -16,7 +17,8 @@ from terrain_utils import crop_terrain
 
 
 
-def animate_trajectory(x_vals, y_vals, z_vals, terrain_x, terrain_y, terrain_z, output_file="./results/trajectory.mp4",
+def animate_trajectory(x_vals, y_vals, z_vals, terrain_x, terrain_y, terrain_z,
+                       t_vals, p_total_vals, output_file="./results/trajectory.mp4",
                        x_min=16000, x_max=24000, y_min=78000, y_max=84000,
                        fps=10, interval=100):
 
@@ -61,10 +63,24 @@ def animate_trajectory(x_vals, y_vals, z_vals, terrain_x, terrain_y, terrain_z, 
     min_z = np.min(terrain_z)
     X, Y       = np.meshgrid(terrain_x, terrain_y)
 
+    p_positive = np.clip(p_total_vals, 0, None)
+
+    cumulative_energy = np.concatenate((
+        [0],
+        np.cumsum((p_positive[:-1] + p_positive[1:] * np.diff(t_vals)/2))
+    ))
+
+
     # Setup the figure
     fig = plt.figure(figsize=(10, 10))
     ax  = fig.add_subplot(111, projection='3d')
 
+    axEnergy = inset_axes(ax, width="30%", height="30%", loc='upper right', borderpad=3)
+    axEnergy.set_xlim(t_vals.min(), t_vals.max())
+    axEnergy.set_ylim(0, cumulative_energy.max()*1.1)
+    axEnergy.set_xlabel("Time (s)")
+    axEnergy.set_ylabel("Energy (J)")
+    axEnergy.set_title("Cumulative Energy")
     # static terrain
     ax.plot_surface(
         X, Y, terrain_z,
@@ -83,6 +99,7 @@ def animate_trajectory(x_vals, y_vals, z_vals, terrain_x, terrain_y, terrain_z, 
     # prepare the moving line and point
     line, = ax.plot([], [], [], lw=3, color='blue')
     point, = ax.plot([], [], [], 'o', color='red', markersize=6)
+    line_E, = axEnergy.plot([], [], color='magenta', lw=2)
 
     # fix axes
     ax.set_xlim(terrain_x.min(), terrain_x.max())
@@ -97,7 +114,8 @@ def animate_trajectory(x_vals, y_vals, z_vals, terrain_x, terrain_y, terrain_z, 
         line.set_3d_properties([])
         point.set_data([], [])
         point.set_3d_properties([])
-        return line, point
+        line_E.set_data([], [])
+        return line, point, line_E
 
     def update(i):
         # draw path up to step i
@@ -105,7 +123,8 @@ def animate_trajectory(x_vals, y_vals, z_vals, terrain_x, terrain_y, terrain_z, 
         line.set_3d_properties(z_vals[:i])
         point.set_data(x_vals[i], y_vals[i])
         point.set_3d_properties(z_vals[i])
-        return line, point
+        line_E.set_data(t_vals[:i+1], cumulative_energy[:i+1])
+        return line, point, line_E
 
     # build the animation
     anim = FuncAnimation(

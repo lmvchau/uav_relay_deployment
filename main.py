@@ -39,7 +39,7 @@ def main():
         output_file='results/trajectory3d_refactored.png'
     )
 
-    animate_trajectory(x_vals, y_vals, z_vals, tx, ty, tz, output_file="./results/trajectory_refactored.mp4")
+    animate_trajectory(x_vals, y_vals, z_vals, tx, ty, tz, t_vals=t_vals, p_total_vals=p_total_vals, output_file="./results/trajectory_refactored.mp4")
 
     # -----------------------------
     # Velocity Plot
