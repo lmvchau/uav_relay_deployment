@@ -148,11 +148,13 @@ def plot_time_series(t_vals, data, label, ylabel, filename, all_leg_idx: np.ndar
         cmap = plt.cm.get_cmap('tab10', len(unique_legs))
 
 
-    for leg_id in unique_legs:
-        indices = np.where(leg_idx == leg_id)
-        plt.plot(t_vals[indices], data[indices],
-                label=f'Leg {leg_id}', color=cmap(leg_id - 1), linewidth=2)
-    
+        for leg_id in unique_legs:
+            indices = np.where(leg_idx == leg_id)
+            plt.plot(t_vals[indices], data[indices],
+                    label=f'Leg {leg_id}', color=cmap(leg_id - 1), linewidth=2)
+        
+    else:
+        plt.plot(t_vals, data, label=label)
     # plt.plot(t_vals, data, label=label)
     plt.xlabel('Time (s)')
     plt.ylabel(ylabel)

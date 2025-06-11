@@ -1,32 +1,13 @@
 import numpy as np
 from gekko import GEKKO 
 
-# ---------------------
-# Parameters
-# ---------------------
-g = 9.81
-m_uav = 5.0  # kg
-A = 0.79     # disk area (m²)
-cf = 0.13    # profile correction factor
-s = 0.1      # rotor solidity
-c_T = 0.3    # thrust coefficient based on disk area 
-delta = 0.012  
-rho = 1.225  # air density (kg/m³)
-SFP = 0.01   # fuselage equivalent flat area
-v_ref = 5.0  # wind velocity at reference height (m/s)
-z_ref = 1000  # reference height for wind profile (m)
-alpha = 0.28  # wind profile exponent
-H_min = 10
-v_max = 20 
-dt = 1 # time step for the simulation
-beta = 30 # angle of wind in degrees
-distance_threshold = 1  # threshold for arrival distance in meters
+distance_threshold = 1
 
 def optimize_leg(
     leg_id, x1, y1, z1, x2, y2, z2,
-    terrain_elev, terrain_x, terrain_y, terrain_z, H_min=H_min, v_max=v_max, 
-    v_ref=v_ref, z_ref=z_ref, alpha=alpha, beta=beta,
-    g=g, m_uav=m_uav, rho=rho, SFP=SFP, cf=cf, delta=delta, c_T=c_T
+    terrain_elev, terrain_x, terrain_y, terrain_z, H_min, v_max, 
+    v_ref, z_ref, alpha, beta,
+    g, m_uav, rho, SFP, cf, delta, c_T, A, s
 ):
     """
     Solve one leg from (x1,y1,z1)->(x2,y2,z2), returning time-series arrays.
@@ -104,10 +85,14 @@ def optimize_leg(
         # -----------------------------
 
         beta_rad = np.radians(beta)  # Convert beta to radians
+        print(f"[DEBUG] beta (deg): {beta}, beta_rad: {beta_rad}, cos: {np.cos(beta_rad):.2f}, sin: {np.sin(beta_rad):.2f}")
         vw_mag = m.Intermediate(v_ref * (z / z_ref)**alpha)
 
-        vw_x = m.Intermediate(vw_mag * m.cos(beta_rad))  # Wind velocity in x direction
-        vw_y = m.Intermediate(vw_mag * m.sin(beta_rad))  # Wind velocity in y direction
+        cos_beta = np.cos(beta_rad)
+        sin_beta = np.sin(beta_rad)
+
+        vw_x = m.Intermediate(vw_mag * cos_beta)  # Wind velocity in x direction
+        vw_y = m.Intermediate(vw_mag * sin_beta)  # Wind velocity in y direction
 
         vx_rel = m.Intermediate(vx - vw_x)  # Relative x velocity
         vy_rel = m.Intermediate(vy - vw_y)  # Relative y velocity
@@ -163,7 +148,8 @@ def optimize_leg(
         pc = m.Intermediate(m_uav * g * v_mag * tau_c_approx)  # Climb power
         p_total = m.Intermediate(pc + pd + pi + pb)  # Total power
 
-        m.Obj(0.001 * p_total)  # Minimize climb and drag power
+        
+        m.Obj(p_total)  # Minimize climb and drag power
 
 
         try:
@@ -180,6 +166,12 @@ def optimize_leg(
             clearance = z_vals - z_floor_vals
 
             print("\nMin clearance: {:.2f} m".format(clearance.min()))
+
+
+            print(f"[DEBUG] vw_x sample: {np.array(vw_x.value)[:10]}")
+            print(f"[DEBUG] vx_rel sample: {np.array(vx_rel.value)[:10]}")
+            print(f"[DEBUG] pd sample: {np.array(pd.value)[:10]}")
+
 
             print("################################################################################################")
 
@@ -211,7 +203,11 @@ def optimize_leg(
 
     return x.value, y.value, z.value, vx.value, vy.value, vz.value, p_total.value, pc.value, pd.value, pi.value, pb.value, m.time, z_floor_vals
 
-def optimize_trajectory(waypoints, terrain_elev, terrain_x, terrain_y, terrain_z):
+def optimize_trajectory(waypoints, terrain_elev, terrain_x, terrain_y, terrain_z,
+                        H_min, v_max, 
+                        v_ref, z_ref, alpha, beta,
+                        g, m_uav, rho, SFP, cf, delta, c_T, A, s
+):
     """
     waypoints: array of shape (M,3).  Calls optimize_leg for each segment,
     concatenates results, returns big arrays: x_vals,y_vals,z_vals,...,leg_idx
@@ -248,7 +244,11 @@ def optimize_trajectory(waypoints, terrain_elev, terrain_x, terrain_y, terrain_z
         x2, y2, z2 = waypoints[i + 1]
 
         print(f"Optimizing leg {i+1} from ({x1}, {y1}, {z1}) to ({x2}, {y2}, {z2})")
-        results = optimize_leg(i+1, x1, y1, z1, x2, y2, z2, terrain_elev=terrain_elev, terrain_x=terrain_x, terrain_y=terrain_y, terrain_z=terrain_z)
+        results = optimize_leg(i+1, x1, y1, z1, x2, y2, z2, terrain_elev=terrain_elev, terrain_x=terrain_x, terrain_y=terrain_y, terrain_z=terrain_z,
+                                    H_min=H_min, v_max=v_max, 
+                                    v_ref=v_ref, z_ref=z_ref, alpha=alpha, beta=beta,
+                                    g=g, m_uav=m_uav, rho=rho, SFP=SFP, cf=cf, delta=delta, c_T=c_T, A=A, s=s
+        )
     
         if results:
             x_results, y_results, z_results, vx_results, vy_results, vz_results, p_total_results, pc_results, pd_results, pi_results, pb_results, time_results, z_floor_results = results
